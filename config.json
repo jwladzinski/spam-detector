@@ -1,0 +1,10 @@
+{
+	"account": "pomocnik",
+	"nodes": ["https://api.steemit.com/"],
+	"tags" : ["polish"],
+	"probability_threshold" : 0.85,
+	"training_file" : "spam_or_ham.txt",
+	"reply_mode" : 1,
+	"vote_mode" : 0,
+	"vote_weight" : -50
+}
