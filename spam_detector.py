@@ -73,6 +73,18 @@ class SpamDetectorBot:
     def log(self, p, author, message):
         print('Spam probability: %.2f%%  |  ' % (100 * p), '@' + author + ':', message[:50])
 
+    def replace_white_spaces_with_space(self, text):
+        return text.replace('\t', ' ').replace('\r', ' ').replace('\n', ' ')
+
+    # every comment that is classified as spam, is added to training file
+    def append_message(self, label, message):
+        with open(self.training_file, 'a') as f:
+            f.write(label + '\t' + self.replace_white_spaces_with_space(message) + '\n')
+
+    # response that will be written by bot
+    def response(self, p):
+        return 'Please stop spamming in comments or else people may flag you!\n<sup>Spam probability: %.2f%% </sup>' % (100 * p)
+
     def run(self):
         blockchain = Blockchain(steemd_instance=self.steem)
         # stream of comments
@@ -89,7 +101,16 @@ class SpamDetectorBot:
                             message = remove_html_and_markdown(post['body'].strip()) 
                             # calculates probability that given message is spam
                             p = self.model.spam_probability(message)
-                            self.log(p, post['author'], message)    
+                            self.log(p, post['author'], message)
+                            self.seen.add(post['url'])
+                            # if probability is greater than threshold
+                            if p > self.probability_threshold:
+                                self.append_message('spam', message)
+                                response = self.response(p)
+                                if self.reply_mode:
+                                    post.reply(response, '', self.account)
+                                if self.vote_mode:
+                                    post.upvote(weight=self.vote_weight, voter=self.account)    
             except Exception as ex:
                 print(repr(ex))
                 continue
