@@ -112,7 +112,10 @@ class SpamDetectorBot:
                                     post.reply(response, '', self.account)
                                 if self.vote_mode:
                                     post.upvote(weight=self.vote_weight, voter=self.account)    
+            except PostDoesNotExist as pex
+                continue
             except Exception as ex:
+                print(repr(ex))
                 continue
 
 def main():
