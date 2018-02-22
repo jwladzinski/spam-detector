@@ -16,6 +16,10 @@ from sklearn.naive_bayes import MultinomialNB
 # private posting key from environment variable
 POSTING_KEY = os.getenv('POSTING_KEY')
 
+# removes markdown and html tags from text
+def remove_html_and_markdown(text):
+    return ''.join(BeautifulSoup(text, 'lxml').findAll(text=True))
+
 # Multinomial Naive Bayes based spam filter trained from input file
 class NaiveBayesSpamFilter:
     def __init__(self, training_file):
