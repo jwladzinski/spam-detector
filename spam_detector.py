@@ -112,7 +112,6 @@ class SpamDetectorBot:
                                 if self.vote_mode:
                                     post.upvote(weight=self.vote_weight, voter=self.account)    
             except Exception as ex:
-                print(repr(ex))
                 continue
 
 def main():
