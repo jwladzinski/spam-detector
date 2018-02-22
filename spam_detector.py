@@ -60,6 +60,18 @@ class SpamDetectorBot:
         # a we don't want to analyze one comment multiple times)
         self.seen = set()
 
+    def run(self):
+        blockchain = Blockchain(steemd_instance=self.steem)
+        # stream of comments
+        stream = blockchain.stream(filter_by=['comment'])
+        while True:
+            try:
+                for comment in stream:
+                    post = Post(comment, steemd_instance=self.steem)
+                    print(post)       
+            except Exception as ex:
+                continue
+
 def main():
     # read config file
     config = json.loads(open(sys.argv[1]).read())
