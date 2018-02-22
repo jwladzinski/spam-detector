@@ -69,6 +69,10 @@ class SpamDetectorBot:
     def main_post(self, post):
         return Post(post['url'].split('#')[0], steemd_instance=self.steem)
 
+    # log to console
+    def log(self, p, author, message):
+        print('Spam probability: %.2f%%  |  ' % (100 * p), '@' + author + ':', message[:50])
+
     def run(self):
         blockchain = Blockchain(steemd_instance=self.steem)
         # stream of comments
@@ -83,7 +87,9 @@ class SpamDetectorBot:
                         # otherwise bot analyzes only comments that contains at least one of given tag          
                         if not self.tags or (set(self.tags) & set(main_post['tags'])):      
                             message = remove_html_and_markdown(post['body'].strip()) 
-                            print(message[:50])     
+                            # calculates probability that given message is spam
+                            p = self.model.spam_probability(message)
+                            self.log(p, post['author'], message)    
             except Exception as ex:
                 print(repr(ex))
                 continue
