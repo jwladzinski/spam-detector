@@ -9,6 +9,7 @@ from steem import Steem
 from steem.blockchain import Blockchain
 from steem.post import Post
 from steem.blog import Blog
+from steembase.exceptions import PostDoesNotExist
 from textblob import TextBlob
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
@@ -112,7 +113,7 @@ class SpamDetectorBot:
                                     post.reply(response, '', self.account)
                                 if self.vote_mode:
                                     post.upvote(weight=self.vote_weight, voter=self.account)    
-            except PostDoesNotExist as pex
+            except PostDoesNotExist as pex:
                 continue
             except Exception as ex:
                 print(repr(ex))
