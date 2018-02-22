@@ -75,7 +75,7 @@ class SpamDetectorBot:
 
     # log to console
     def log(self, p, author, message):
-        print('Spam probability: %.2f%%  |  ' % (100 * p), '@' + author + ':', message[:50])
+        print('Spam score: %.2f%%  |  ' % (100 * p), '@' + author + ':', message[:50])
 
     # every comment that is classified as spam, is added to training file
     def append_message(self, label, message):
