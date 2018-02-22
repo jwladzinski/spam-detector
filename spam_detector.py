@@ -21,6 +21,9 @@ POSTING_KEY = os.getenv('POSTING_KEY')
 def remove_html_and_markdown(text):
     return ''.join(BeautifulSoup(text, 'lxml').findAll(text=True))
 
+def replace_white_spaces_with_space(text):
+    return text.replace('\t', ' ').replace('\r', ' ').replace('\n', ' ')
+
 # Multinomial Naive Bayes based spam filter trained from input file
 class NaiveBayesSpamFilter:
     def __init__(self, training_file):
@@ -73,13 +76,10 @@ class SpamDetectorBot:
     def log(self, p, author, message):
         print('Spam probability: %.2f%%  |  ' % (100 * p), '@' + author + ':', message[:50])
 
-    def replace_white_spaces_with_space(self, text):
-        return text.replace('\t', ' ').replace('\r', ' ').replace('\n', ' ')
-
     # every comment that is classified as spam, is added to training file
     def append_message(self, label, message):
         with open(self.training_file, 'a') as f:
-            f.write(label + '\t' + self.replace_white_spaces_with_space(message) + '\n')
+            f.write(label + '\t' + replace_white_spaces_with_space(message) + '\n')
 
     # response that will be written by bot
     def response(self, p):
@@ -99,6 +99,7 @@ class SpamDetectorBot:
                         # otherwise bot analyzes only comments that contains at least one of given tag          
                         if not self.tags or (set(self.tags) & set(main_post['tags'])):      
                             message = remove_html_and_markdown(post['body'].strip()) 
+                            message = replace_white_spaces_with_space(message)
                             # calculates probability that given message is spam
                             p = self.model.spam_probability(message)
                             self.log(p, post['author'], message)
