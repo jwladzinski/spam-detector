@@ -10,7 +10,7 @@ Repository contains requirements.txt file.
 
 ### Running 
 
-`$ POSTING_KEY=<posting_key> spam_detector config.json`
+`$ POSTING_KEY=<posting_key> spam_detector.py config.json`
 
 Private posting key is stored as environent variable.
 
