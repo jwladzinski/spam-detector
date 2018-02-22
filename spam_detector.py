@@ -12,6 +12,7 @@ from steem.blog import Blog
 from textblob import TextBlob
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
+from bs4 import BeautifulSoup
 
 # private posting key from environment variable
 POSTING_KEY = os.getenv('POSTING_KEY')
@@ -64,6 +65,10 @@ class SpamDetectorBot:
         # a we don't want to analyze one comment multiple times)
         self.seen = set()
 
+    # returns main post from given comment
+    def main_post(self, post):
+        return Post(post['url'].split('#')[0], steemd_instance=self.steem)
+
     def run(self):
         blockchain = Blockchain(steemd_instance=self.steem)
         # stream of comments
@@ -72,8 +77,15 @@ class SpamDetectorBot:
             try:
                 for comment in stream:
                     post = Post(comment, steemd_instance=self.steem)
-                    print(post)       
+                    if not post.is_main_post() and post['url'] not in self.seen:
+                        main_post = self.main_post(post)
+                        # if self.tags is empty bot analyzes all tags
+                        # otherwise bot analyzes only comments that contains at least one of given tag          
+                        if not self.tags or (set(self.tags) & set(main_post['tags'])):      
+                            message = remove_html_and_markdown(post['body'].strip()) 
+                            print(message[:50])     
             except Exception as ex:
+                print(repr(ex))
                 continue
 
 def main():
@@ -83,6 +95,8 @@ def main():
     model = NaiveBayesSpamFilter(config['training_file'])
     # create bot
     bot = SpamDetectorBot(config, model)
+    # start bot
+    bot.run()
 
 if __name__ == '__main__':
     main()
