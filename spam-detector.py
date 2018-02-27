@@ -16,14 +16,23 @@ from sklearn.naive_bayes import MultinomialNB
 from bs4 import BeautifulSoup
 
 # private posting key from environment variable
-POSTING_KEY = os.getenv('POSTING_KEY')
+POSTING_KEY = os.getenv('POMOCNIK_POSTING_KEY')
 
 # removes markdown and html tags from text
 def remove_html_and_markdown(text):
-    return ''.join(BeautifulSoup(text, 'lxml').findAll(text=True))
+    return ''.join(BeautifulSoup(text, 'html.parser').findAll(text=True))
 
 def replace_white_spaces_with_space(text):
     return text.replace('\t', ' ').replace('\r', ' ').replace('\n', ' ')
+
+def get_message_from_post(post):
+    message = post['body'].strip() 
+    return replace_white_spaces_with_space(remove_html_and_markdown(message))
+
+def average_spam_score(model, blog, k=5):   
+    scores = [model.spam_score(get_message_from_post(previous_post)) for previous_post in blog.take(k)]
+    average = sum(scores) / len(scores)
+    return average
 
 # Multinomial Naive Bayes based spam filter trained from input file
 class NaiveBayesSpamFilter:
@@ -38,7 +47,7 @@ class NaiveBayesSpamFilter:
         self.multinomial_nb = MultinomialNB().fit(self.messages_tfidf, self.messages['label'])
       
     # return probability that given message is spam (0.0 - 1.0)
-    def spam_probability(self, message):
+    def spam_score(self, message):
         bag_of_words = self.bag_of_words_transformer.transform([message])
         tfidf = self.tfidf_transformer.transform(bag_of_words)
         return self.multinomial_nb.predict_proba(tfidf)[0][1]
@@ -98,15 +107,12 @@ class SpamDetectorBot:
                         main_post = self.main_post(post)
                         # if self.tags is empty bot analyzes all tags
                         # otherwise bot analyzes only comments that contains at least one of given tag          
-                        if not self.tags or (set(self.tags) & set(main_post['tags'])):      
-                            message = remove_html_and_markdown(post['body'].strip()) 
-                            message = replace_white_spaces_with_space(message)
-                            # calculates probability that given message is spam
-                            p = self.model.spam_probability(message)
+                        if True:# not self.tags or (set(self.tags) & set(main_post['tags'])):   
+                            message = get_message_from_post(post) 
+                            blog = Blog(account_name=post['author'], comments_only=True, steemd_instance=self.steem)
+                            p = average_spam_score(self.model, blog, 5)
                             self.log(p, post['author'], message)
                             self.seen.add(post['url'])
-                            # if probability is greater than threshold
-                            p = 0.8123
                             if p > self.probability_threshold:
                                 self.append_message('spam', message)
                                 response = self.response(p)
