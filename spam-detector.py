@@ -106,13 +106,14 @@ class SpamDetectorBot:
                             self.log(p, post['author'], message)
                             self.seen.add(post['url'])
                             # if probability is greater than threshold
+                            p = 0.8123
                             if p > self.probability_threshold:
                                 self.append_message('spam', message)
                                 response = self.response(p)
                                 if self.reply_mode:
                                     post.reply(response, '', self.account)
                                 if self.vote_mode:
-                                    post.upvote(weight=self.vote_weight, voter=self.account)    
+                                    post.upvote(weight=self.vote_weight, voter=self.account) 
             except PostDoesNotExist as pex:
                 continue
             except Exception as ex:
