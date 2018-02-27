@@ -2,9 +2,10 @@
 	"account": "pomocnik",
 	"nodes": ["https://api.steemit.com/"],
 	"tags" : ["polish"],
-	"probability_threshold" : 0.80,
+	"probability_threshold" : 0.70,
 	"training_file" : "spam_or_ham.txt",
-	"reply_mode" : 1,
+	"whitelist_file" : "whitelist.txt",
+	"reply_mode" : 0,
 	"vote_mode" : 0,
 	"vote_weight" : -50
 }

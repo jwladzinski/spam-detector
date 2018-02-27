@@ -65,10 +65,12 @@ class SpamDetectorBot:
         self.tags = config['tags']
         self.probability_threshold = config['probability_threshold']
         self.training_file = config['training_file']
+        self.whitelist_file = config['whitelist_file']
         self.reply_mode = config['reply_mode']
         self.vote_mode = config['vote_mode']
         self.vote_weight = config['vote_weight']
 
+        self.whitelist = [user.strip() for user in open(self.whitelist_file, 'r').readlines()]
         self.steem = Steem(nodes=self.nodes, keys=[POSTING_KEY])
 
         # machine learning model (=algorithm)
@@ -105,6 +107,11 @@ class SpamDetectorBot:
                     post = Post(comment, steemd_instance=self.steem)
                     if not post.is_main_post() and post['url'] not in self.seen:
                         main_post = self.main_post(post)
+
+                        if post['author'] in self.whitelist:
+                            print('Ignored:', post['author'])
+                            continue
+
                         # if self.tags is empty bot analyzes all tags
                         # otherwise bot analyzes only comments that contains at least one of given tag          
                         if True:# not self.tags or (set(self.tags) & set(main_post['tags'])):   
