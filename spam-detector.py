@@ -7,6 +7,8 @@ import csv
 import numpy as np
 import pandas as pd
 from pprint import pprint
+from collections import Counter
+from operator import itemgetter
 from steem import Steem
 from steem.blockchain import Blockchain
 from steem.post import Post
@@ -46,12 +48,23 @@ class NaiveBayesSpamFilter:
         y = self.messages['label']
 
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        self.bag_of_words_transformer = CountVectorizer(analyzer=self.split_into_lemmas).fit(self.X_train)
+        self.bag_of_words_transformer = CountVectorizer(
+            analyzer=self.split_into_lemmas,
+            stop_words='english',
+            strip_accents='unicode').fit(self.X_train)
+
         self.messages_bag_of_words = self.bag_of_words_transformer.transform(self.X_train)
         self.tfidf_transformer = TfidfTransformer().fit(self.messages_bag_of_words)
         self.messages_tfidf = self.tfidf_transformer.transform(self.messages_bag_of_words)
         # train Multinomial Naive Bayes algorithm with training data
         self.multinomial_nb = MultinomialNB().fit(self.messages_tfidf, self.y_train)
+
+    def make_dictionary(self, X):
+        all_words = []       
+        for x in X:
+            all_words += self.split_into_lemmas(x)     
+        counter = Counter(all_words)
+        return counter
 
     # return probability that given message is spam (0.0 - 1.0)
     def spam_score(self, message):
@@ -67,7 +80,10 @@ class NaiveBayesSpamFilter:
     # split text into list of lemmas
     # 'Apples and oranges' -> ['apple', 'and', 'orange']
     def split_into_lemmas(self, message):
-        return [word.lemma for word in TextBlob(message.lower()).words]
+        lemmas = [word.lemma for word in TextBlob(message.lower()).words]
+        lemmas = filter(lambda w: w.isalpha(), lemmas)
+        lemmas = filter(lambda w: len(w) > 1, lemmas)
+        return lemmas
 
     def test_model(self, probability_threshold):
 
@@ -79,16 +95,12 @@ class NaiveBayesSpamFilter:
         y_test = self.y_test.tolist()
 
         for i, x in enumerate(X_test):
-
             prediction = 0 if self.spam_score(x) <= probability_threshold else 1
             label = 0 if y_test[i] == 'ham' else 1
-
             confusion_matrix[prediction][label] += 1
 
         print(np.array(confusion_matrix))
 
-
-    
 
 class SpamDetectorBot:
     def __init__(self, config, model):
