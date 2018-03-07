@@ -17,7 +17,9 @@ from steembase.exceptions import PostDoesNotExist
 from textblob import TextBlob
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.svm import LinearSVC
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix
 from bs4 import BeautifulSoup
 
 # private posting key from environment variable
@@ -33,10 +35,6 @@ def replace_white_spaces_with_space(text):
 def get_message_from_post(post):
     message = post['body'].strip() 
     return replace_white_spaces_with_space(remove_html_and_markdown(message))
-
-
-
-
 
 # Multinomial Naive Bayes based spam filter trained from input file
 class NaiveBayesSpamFilter:
@@ -58,6 +56,10 @@ class NaiveBayesSpamFilter:
         self.messages_tfidf = self.tfidf_transformer.transform(self.messages_bag_of_words)
         # train Multinomial Naive Bayes algorithm with training data
         self.multinomial_nb = MultinomialNB().fit(self.messages_tfidf, self.y_train)
+        # self.linear_svc = LinearSVC().fit(self.messages_tfidf, self.y_train)
+
+
+        #print(confusion_matrix(self.y_train, result1))
 
     def make_dictionary(self, X):
         all_words = []       
@@ -72,8 +74,9 @@ class NaiveBayesSpamFilter:
         tfidf = self.tfidf_transformer.transform(bag_of_words)
         return self.multinomial_nb.predict_proba(tfidf)[0][1]
 
-    def average_spam_score(self, blog, k=5):   
-        scores = [self.spam_score(get_message_from_post(previous_post)) for previous_post in blog.take(k)]
+    def average_spam_score(self, steem, author, k=5):
+        previous_posts = map(lambda post: Post(post['comment']), steem.get_blog(author, 0, k))
+        scores = [self.spam_score(get_message_from_post(previous_post)) for previous_post in previous_posts]
         average = sum(scores) / len(scores)
         return average
   
@@ -86,6 +89,8 @@ class NaiveBayesSpamFilter:
         return lemmas
 
     def test_model(self, probability_threshold):
+
+
 
         confusion_matrix = [
         [0, 0],
@@ -152,21 +157,19 @@ class SpamDetectorBot:
         while True:
             try:
                 for comment in stream:
-                    post = Post(comment, steemd_instance=self.steem)
+                    post = Post(comment)
                     if not post.is_main_post() and post['url'] not in self.seen:
                         main_post = self.main_post(post)
 
                         # if self.tags is empty bot analyzes all tags
                         # otherwise bot analyzes only comments that contains at least one of given tag          
                         if not self.tags or (set(self.tags) & set(main_post['tags'])):
-
                             if post['author'] in self.whitelist:
                                 print('Ignored:', post['author'])
                                 continue
 
                             message = get_message_from_post(post) 
-                            blog = Blog(account_name=post['author'], comments_only=True, steemd_instance=self.steem)
-                            p = self.model.average_spam_score(blog, 5)
+                            p = self.model.average_spam_score(self.steem, post['author'], 5)
                             print('*' if p > self.probability_threshold else ' ', end='')       
                             self.log(p, post['author'], message)
                             self.seen.add(post['url'])
