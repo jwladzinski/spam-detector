@@ -166,6 +166,11 @@ class SpamDetectorBot:
         generic_part +
         '\n<sup>Spam probability: %.2f%% </sup>' % (100 * p))
 
+    def reply(self, post, response):
+        if self.account in [p['author'] for p in post.get_replies()]
+            return
+        post.reply(response, '', self.account)
+
     def vote(self, post):
         for vote in post['active_votes']:
             if self.account in vote['voter']:
@@ -204,7 +209,7 @@ class SpamDetectorBot:
                                 response = self.response(p, generic_message, rep)
                                 print(response)
                                 if self.reply_mode:
-                                    post.reply(response, '', self.account)
+                                    self.reply(post, response)
                                 if self.vote_mode:
                                     self.vote(post)
                     return
