@@ -166,6 +166,12 @@ class SpamDetectorBot:
         generic_part +
         '\n<sup>Spam probability: %.2f%% </sup>' % (100 * p))
 
+    def vote(self, post):
+        for vote in post['active_votes']:
+            if self.account in vote['voter']:
+                return
+        post.upvote(weight=self.vote_weight, voter=self.account)
+
     def run(self):
 
         self.model.test_model(self.probability_threshold)
@@ -176,7 +182,6 @@ class SpamDetectorBot:
         while True:
             try:
                 for comment in stream:
-                    comment = 'https://steemit.com/polish/@grzegorz2047/witness-node-i-32-gb-ram#@foodtube/re-grzegorz2047-witness-node-i-32-gb-ram-20180311t222732709z'
                     post = Post(comment, steemd_instance=self.steem)
                     if not post.is_main_post() and post['url'] not in self.seen:
                         main_post = self.main_post(post)
@@ -201,8 +206,8 @@ class SpamDetectorBot:
                                 if self.reply_mode:
                                     post.reply(response, '', self.account)
                                 if self.vote_mode:
-                                    post.upvote(weight=self.vote_weight, voter=self.account)
-                        return
+                                    self.vote(post)
+                    return
             except PostDoesNotExist as pex:
                 continue
             except Exception as ex:
