@@ -11,6 +11,8 @@ from collections import Counter
 from operator import itemgetter
 from steem import Steem
 from steem.blockchain import Blockchain
+from steem.steemd import Steemd
+from steem.instance import set_shared_steemd_instance
 from steem.post import Post
 from steem.blog import Blog
 from steembase.exceptions import PostDoesNotExist
@@ -20,12 +22,21 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.model_selection import train_test_split
 from bs4 import BeautifulSoup
 
+steemd_nodes = [
+    'https://api.steemit.com/',
+    'https://gtg.steem.house:8090/',
+    'https://steemd.steemitstage.com/',
+    'https://steemd.steemgigs.org/'
+]
+set_shared_steemd_instance(Steemd(nodes=steemd_nodes))
+
+
 # private posting key from environment variable
 POSTING_KEY = os.getenv('POMOCNIK_POSTING_KEY')
 
 # removes markdown and html tags from text
 def remove_html_and_markdown(text):
-    return ''.join(BeautifulSoup(text, 'html.parser').findAll(text=True))
+    return ''.join(BeautifulSoup(text, 'lxml').findAll(text=True))
 
 def replace_white_spaces_with_space(text):
     return text.replace('\t', ' ').replace('\r', ' ').replace('\n', ' ')
@@ -68,10 +79,22 @@ class NaiveBayesSpamFilter:
         tfidf = self.tfidf_transformer.transform(bag_of_words)
         return self.multinomial_nb.predict_proba(tfidf)[0][1]
 
-    def average_spam_score(self, blog, k=5):   
-        scores = [self.spam_score(get_message_from_post(previous_post)) for previous_post in blog.take(k)]
+    def average_spam_score(self, blog, k):
+        previous_messages = [get_message_from_post(previous_post) for previous_post in blog.take(k)]
+        counter = Counter()
+        for message in previous_messages:
+            counter[message] += 1
+
+        most_common = counter.most_common(1)[0]
+        generic_message = None
+        rep = most_common[1]
+
+        if rep >= 0.5 * k:
+            generic_message = most_common[0]
+
+        scores = [self.spam_score(m) for m in previous_messages]
         average = sum(scores) / len(scores)
-        return average
+        return average, generic_message, rep
   
     # split text into list of lemmas
     # 'Apples and oranges' -> ['apple', 'and', 'orange']
@@ -110,8 +133,8 @@ class SpamDetectorBot:
         self.reply_mode = config['reply_mode']
         self.vote_mode = config['vote_mode']
         self.vote_weight = config['vote_weight']
-
         self.whitelist = [user.strip() for user in open(self.whitelist_file, 'r').readlines()]
+        self.num_previous_comments = config['num_previous_comments']
         self.steem = Steem(nodes=self.nodes, keys=[POSTING_KEY])
 
         # machine learning model (=algorithm)
@@ -135,8 +158,13 @@ class SpamDetectorBot:
             f.write(label + '\t' + replace_white_spaces_with_space(message) + '\n')
 
     # response that will be written by bot
-    def response(self, p):
-        return 'Please stop spamming in comments or else people may flag you!\n<sup>Spam probability: %.2f%% </sup>' % (100 * p)
+    def response(self, p, generic_message, rep):
+
+        generic_part = ('Last %d/%d of your comments have content:\n> %s\n' % (rep, self.num_previous_comments, generic_message)) if generic_message else ''
+        return (
+        'Please stop spamming in comments or else people will flag you!\n' + 
+        generic_part +
+        '\n<sup>Spam probability: %.2f%% </sup>' % (100 * p))
 
     def run(self):
 
@@ -148,10 +176,10 @@ class SpamDetectorBot:
         while True:
             try:
                 for comment in stream:
+                    comment = 'https://steemit.com/polish/@grzegorz2047/witness-node-i-32-gb-ram#@foodtube/re-grzegorz2047-witness-node-i-32-gb-ram-20180311t222732709z'
                     post = Post(comment, steemd_instance=self.steem)
                     if not post.is_main_post() and post['url'] not in self.seen:
                         main_post = self.main_post(post)
-
                         # if self.tags is empty bot analyzes all tags
                         # otherwise bot analyzes only comments that contains at least one of given tag          
                         if not self.tags or (set(self.tags) & set(main_post['tags'])):
@@ -162,17 +190,19 @@ class SpamDetectorBot:
 
                             message = get_message_from_post(post) 
                             blog = Blog(account_name=post['author'], comments_only=True, steemd_instance=self.steem)
-                            p = self.model.average_spam_score(blog, 5)
+                            p, generic_message, rep = self.model.average_spam_score(blog, self.num_previous_comments)
                             print('*' if p > self.probability_threshold else ' ', end='')       
                             self.log(p, post['author'], message)
                             self.seen.add(post['url'])
                             if p > self.probability_threshold:
                                 self.append_message('spam', message)
-                                response = self.response(p)
+                                response = self.response(p, generic_message, rep)
+                                print(response)
                                 if self.reply_mode:
                                     post.reply(response, '', self.account)
                                 if self.vote_mode:
-                                    post.upvote(weight=self.vote_weight, voter=self.account) 
+                                    post.upvote(weight=self.vote_weight, voter=self.account)
+                        return
             except PostDoesNotExist as pex:
                 continue
             except Exception as ex:
