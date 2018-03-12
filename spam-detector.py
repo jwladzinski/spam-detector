@@ -129,20 +129,18 @@ class SpamDetectorBot:
         self.tags = config['tags']
         self.probability_threshold = config['probability_threshold']
         self.training_file = config['training_file']
+        self.blacklist_file = config['blacklist_file']
         self.whitelist_file = config['whitelist_file']
         self.reply_mode = config['reply_mode']
         self.vote_mode = config['vote_mode']
         self.vote_weight = config['vote_weight']
+        self.blacklist = [user.strip() for user in open(self.blacklist_file, 'r').readlines()]
         self.whitelist = [user.strip() for user in open(self.whitelist_file, 'r').readlines()]
         self.num_previous_comments = config['num_previous_comments']
         self.steem = Steem(nodes=self.nodes, keys=[POSTING_KEY])
 
         # machine learning model (=algorithm)
         self.model = model
-
-        # comments that was previously seen (every edit of comment is de facto creating new comment
-        # a we don't want to analyze one comment multiple times)
-        self.seen = set()
 
     # returns main post from given comment
     def main_post(self, post):
@@ -167,14 +165,26 @@ class SpamDetectorBot:
         '\n<sup>Spam probability: %.2f%% </sup>' % (100 * p))
 
     def reply(self, post, response):
-        if self.account in [p['author'] for p in post.get_replies()]
+        if self.account in [p['author'] for p in post.get_replies()]:
             return
-        post.reply(response, '', self.account)
+        try:
+            post.reply(response, '', self.account)
+        except Exception as ex:
+            print(ex)
 
     def vote(self, post):
-        if self.account in [v['voter'] for v in post['active_votes']]
+        if self.account in [v['voter'] for v in post['active_votes']]:
             return
-        post.upvote(weight=self.vote_weight, voter=self.account)
+        try:
+            post.upvote(weight=self.vote_weight, voter=self.account)
+        except Exception as ex:
+            print(ex)
+
+    def append_to_blacklist(self, user):
+        if user not in self.blacklist:
+            self.blacklist.append(user)
+            with open(self.blacklist_file, 'a') as f:
+                f.write(user + '\n')
 
     def run(self):
 
@@ -186,8 +196,9 @@ class SpamDetectorBot:
         while True:
             try:
                 for comment in stream:
+                    comment = 'https://steemit.com/busy/@kapitanpolak/plany-i-marzenia-czyli-o-przyszlosci-tego-bloga#@foodtube/re-kapitanpolak-plany-i-marzenia-czyli-o-przyszlosci-tego-bloga-20180312t005552841z'
                     post = Post(comment, steemd_instance=self.steem)
-                    if not post.is_main_post() and post['url'] not in self.seen:
+                    if not post.is_main_post() and post['url']:
                         main_post = self.main_post(post)
                         # if self.tags is empty bot analyzes all tags
                         # otherwise bot analyzes only comments that contains at least one of given tag          
@@ -202,8 +213,8 @@ class SpamDetectorBot:
                             p, generic_message, rep = self.model.average_spam_score(blog, self.num_previous_comments)
                             print('*' if p > self.probability_threshold else ' ', end='')       
                             self.log(p, post['author'], message)
-                            self.seen.add(post['url'])
                             if p > self.probability_threshold:
+                                self.append_to_blacklist(post['author'])
                                 self.append_message('spam', message)
                                 response = self.response(p, generic_message, rep)
                                 print(response)
