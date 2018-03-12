@@ -172,9 +172,8 @@ class SpamDetectorBot:
         post.reply(response, '', self.account)
 
     def vote(self, post):
-        for vote in post['active_votes']:
-            if self.account in vote['voter']:
-                return
+        if self.account in [v['voter'] for v in post['active_votes']]
+            return
         post.upvote(weight=self.vote_weight, voter=self.account)
 
     def run(self):
