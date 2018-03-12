@@ -1,11 +1,13 @@
 {
 	"account": "pomocnik",
-	"nodes": ["https://api.steemit.com/"],
+	"nodes": ["https://api.steemit.com/", "https://rpc.buildteam.io"],
 	"tags" : ["polish"],
-	"probability_threshold" : 0.70,
+	"probability_threshold" : 0.8,
 	"training_file" : "spam_or_ham.txt",
+	"blacklist_file" : "blacklist.txt",
 	"whitelist_file" : "whitelist.txt",
-	"reply_mode" : 0,
-	"vote_mode" : 0,
-	"vote_weight" : -50
+	"reply_mode" : 1,
+	"vote_mode" : 1,
+	"vote_weight" : -100,
+	"num_previous_comments" : 50
 }

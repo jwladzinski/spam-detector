@@ -196,7 +196,6 @@ class SpamDetectorBot:
         while True:
             try:
                 for comment in stream:
-                    comment = 'https://steemit.com/busy/@kapitanpolak/plany-i-marzenia-czyli-o-przyszlosci-tego-bloga#@foodtube/re-kapitanpolak-plany-i-marzenia-czyli-o-przyszlosci-tego-bloga-20180312t005552841z'
                     post = Post(comment, steemd_instance=self.steem)
                     if not post.is_main_post() and post['url']:
                         main_post = self.main_post(post)
