@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from pprint import pprint
 from collections import Counter
+import itertools
 from operator import itemgetter
 from steem import Steem
 from steem.blockchain import Blockchain
@@ -22,6 +23,7 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.svm import SVC, LinearSVC, NuSVC
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
+import matplotlib.pyplot as plt
 from bs4 import BeautifulSoup
 
 steemd_nodes = [
@@ -52,15 +54,24 @@ class StackedModel():
         self.models = models
         self.models = [model.fit(X_train, y_train) for model in self.models]
 
-        print('---CONFUSION MATRIX---')
+        
 
         y_predicts = [model.predict(X_test) for model in self.models]
         for y_predict, model in zip(y_predicts, self.models):
-            print(model)
+            print(model, '\n')
+            print('Confusion matrix:')
             print(confusion_matrix(y_test, y_predict), '\n')
 
+        print('Stacked model')
+        print('Confusion matrix:')    
         stacked_y_predict = [self.predict(x) for x in X_test]
-        print(confusion_matrix(y_test, stacked_y_predict), '\n')
+
+
+        stacked_confusion_matrix = confusion_matrix(y_test, stacked_y_predict)
+        print(stacked_confusion_matrix, '\n')
+
+        self.plot_confusion_matrix(stacked_confusion_matrix , classes=['Spam', 'Ham'])
+        
 
     def predict(self, x):
         return 'spam' if self.predict_proba(x) >= 0.5 else 'ham'
@@ -69,6 +80,25 @@ class StackedModel():
         probas = [model.predict_proba(x)[0][1] for model in self.models]
         weighted_proba = sum(probas) / len(probas)
         return weighted_proba
+
+    def plot_confusion_matrix(self, confusion_matrix, classes):
+
+        fig = plt.figure(figsize=(6, 6))
+        plt.imshow(confusion_matrix, interpolation='nearest', cmap=plt.cm.Blues)
+        plt.title('Confusion matrix')
+        tick_marks = np.arange(len(classes))
+        plt.xticks(tick_marks, classes)
+        plt.yticks(tick_marks, classes)
+
+        threshold = confusion_matrix.max() / 2.
+        for i, j in itertools.product(range(2), range(2)):
+            plt.text(j, i, format(confusion_matrix[i, j], 'd'),
+                     horizontalalignment="center",
+                     color="white" if confusion_matrix[i, j] > threshold else "black")
+
+        plt.ylabel('True label')
+        plt.xlabel('Predicted label')
+        fig.savefig('fig.png')
 
 class SpamFilter:
     def __init__(self, training_file):
@@ -107,26 +137,26 @@ class SpamFilter:
         return tfidf
 
     # return probability that given message is spam (0.0 - 1.0)
-    def spam_score(self, X):
+    def spam_probability(self, X):
         tfidf = self.to_tfidf([X])
         return self.model.predict_proba(tfidf)
 
-    def average_spam_score(self, blog, k):
+    def average_spam_probability(self, blog, k):
         previous_messages = [get_message_from_post(previous_post) for previous_post in blog.take(k)]
         counter = Counter()
         for message in previous_messages:
             counter[message] += 1
 
         most_common = counter.most_common(1)[0]
-        generic_message = None
+        generic_comment = None
         rep = most_common[1]
 
         if rep >= 0.5 * k:
-            generic_message = most_common[0]
+            generic_comment = most_common[0]
 
-        scores = [self.spam_score(m) for m in previous_messages]
+        scores = [self.spam_probability(m) for m in previous_messages]
         average = sum(scores) / len(scores)
-        return average, generic_message, rep
+        return average, generic_comment, rep
   
     # split text into list of lemmas
     # 'Apples and oranges' -> ['apple', 'and', 'orange']
@@ -164,8 +194,9 @@ class SpamDetectorBot:
         return Post(post['url'].split('#')[0], steemd_instance=self.steem)
 
     # log to console
-    def log(self, p, author, message):
-        print('Spam score: %.2f%%  |  ' % (100 * p), '@' + author + ':', message[:50])
+    def log(self, spam_probabilty, average_spam_probability, author, message):
+        print('Spam score: %4.2f%% / %4.2f%% |  ' % (100 * spam_probabilty, 100 * average_spam_probability),
+         '@' + author + ':', message[:50])
 
     # every comment that is classified as spam, is added to training file
     def append_message(self, label, message):
@@ -173,9 +204,9 @@ class SpamDetectorBot:
             f.write(label + '\t' + replace_white_spaces_with_space(message) + '\n')
 
     # response that will be written by bot
-    def response(self, p, generic_message, rep):
+    def response(self, p, generic_comment, rep):
 
-        generic_part = ('Last %d/%d of your comments have content:\n> %s\n' % (rep, self.num_previous_comments, generic_message)) if generic_message else ''
+        generic_part = ('Last %d/%d of your comments have content:\n> %s\n' % (rep, self.num_previous_comments, generic_comment)) if generic_comment else ''
         return (
         'Please stop spamming in comments or else people will flag you!\n' + 
         generic_part +
@@ -204,7 +235,7 @@ class SpamDetectorBot:
                 f.write(user + '\n')
 
     def filter_by_tag(self, tags):
-        return not self.tags or (set(self.tags) & set(tags)):
+        return not self.tags or (set(self.tags) & set(tags))
 
     def run(self):
         blockchain = Blockchain(steemd_instance=self.steem)
@@ -218,7 +249,7 @@ class SpamDetectorBot:
                         main_post = self.main_post(post)
                         # if self.tags is empty bot analyzes all tags
                         # otherwise bot analyzes only comments that contains at least one of given tag          
-                        if self.filter_by_tag(main_post['tags'])
+                        if self.filter_by_tag(main_post['tags']):
 
                             if post['author'] in self.whitelist:
                                 print('Ignored:', post['author'])
@@ -230,18 +261,19 @@ class SpamDetectorBot:
                                 self.vote(post)
                                 
                             else:    
-                                message = get_message_from_post(post) 
+                                message = get_message_from_post(post)
+                                spam_probability = self.model.spam_probability(message) 
                                 blog = Blog(account_name=post['author'], comments_only=True, steemd_instance=self.steem)
-                                p, generic_message, rep = self.model.average_spam_score(blog, self.num_previous_comments)
-                                print('*' if p > self.probability_threshold else ' ', end='')       
-                                self.log(p, post['author'], message)
-                                if p > self.probability_threshold:
-                                    # self.append_to_blacklist(post['author'])
+                                average_spam_probability, generic_comment, rep = self.model.average_spam_probability(blog, self.num_previous_comments)
+                                print('*' if average_spam_probability > self.probability_threshold else ' ', end='')       
+                                self.log(spam_probability, average_spam_probability, post['author'], message)
+
+                                if spam_probability > self.probability_threshold and average_spam_probability > self.probability_threshold:
+                                    self.append_to_blacklist(post['author'])
                                     self.append_message('spam', message)
-                                    response = self.response(p, generic_message, rep)
-                                    # print(response)
-                                    if post['author'] in self.blacklist:
-                                        print('---REACTED---')
+                                    response = self.response(average_spam_probability, generic_comment, rep)
+                                    inp = input('y/n\n') # currently I approve manually 
+                                    if inp == 'y':
                                         if self.reply_mode:
                                             self.reply(post, response)
                                         if self.vote_mode:
