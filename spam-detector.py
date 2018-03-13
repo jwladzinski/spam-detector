@@ -97,13 +97,6 @@ class SpamFilter:
         tfidf = self.tfidf_transformer.transform(bag_of_words)
         return tfidf
 
-    def make_dictionary(self, X):
-        all_words = []       
-        for x in X:
-            all_words += self.split_into_lemmas(x)     
-        counter = Counter(all_words)
-        return counter
-
     # return probability that given message is spam (0.0 - 1.0)
     def spam_score(self, X):
         tfidf = self.to_tfidf([X])
