@@ -56,6 +56,12 @@ class StackedModel():
         for y_predict in y_predicts:
             print(confusion_matrix(y_test, y_predict), '\n')
 
+        stacked_y_predict = [self.predict(x) for x in X_test]
+        print(confusion_matrix(y_test, stacked_y_predict), '\n')
+
+    def predict(self, x):
+        return 'spam' if self.predict_proba(x) >= 0.5 else 'ham'
+
     def predict_proba(self, x):
         probas = [model.predict_proba(x)[0][1] for model in self.models]
         weighted_proba = sum(probas) / len(probas)
