@@ -25,6 +25,10 @@ nodes | list of Steem nodes
 tags | tags which are observed
 probability_threshold | threshold to classify as spam
 training_file | input training file
+blacklist_file | file containing blacklist
+whitelist_file | file containing whitelist
+scamlist_file | file containing users who post scams
 reply_mode | 0 - without reply, 1 - with reply
 vote_mode | 0 - without vote, 1 with vote
 vote_weight | weight of the vote from range [-100.0, 100.0]
+num_previous_comments | number of user previous comments that are investigated
