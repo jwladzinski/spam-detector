@@ -19,7 +19,7 @@ from steembase.exceptions import PostDoesNotExist
 from textblob import TextBlob
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.svm import SVC, LinearSVC
+from sklearn.svm import SVC, LinearSVC, NuSVC
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
 from bs4 import BeautifulSoup
@@ -46,7 +46,6 @@ def get_message_from_post(post):
     message = post['body'].strip() 
     return replace_white_spaces_with_space(remove_html_and_markdown(message))
 
-
 class SpamFilter:
     def __init__(self, training_file):
         # read data from training file, each row contains label and message separated by '\t'
@@ -64,29 +63,21 @@ class SpamFilter:
         self.messages_bag_of_words = self.bag_of_words_transformer.transform(self.X_train)
         self.tfidf_transformer = TfidfTransformer().fit(self.messages_bag_of_words)
         self.messages_tfidf = self.tfidf_transformer.transform(self.messages_bag_of_words)
-        # train Multinomial Naive Bayes algorithm with training data
-        self.multinomial_nb = MultinomialNB().fit(self.messages_tfidf, self.y_train)
 
         C = 1.0
 
-        models = (
-            SVC(kernel='linear', C=C),
-            LinearSVC(C=C),
-            SVC(kernel='rbf', gamma=0.7, C=C),
-            SVC(kernel='poly', degree=2, C=C))
+        self.models = (
+            MultinomialNB(),
+            SVC(kernel='linear', C=C, probability=True),     
+            SVC(kernel='rbf', gamma=0.7, C=C, probability=True),
+            NuSVC(probability=True))
 
-        models = (clf.fit(self.messages_tfidf, self.y_train) for clf in models)
-        y_predicts = (model.predict(self.to_tfidf(self.X_test)) for model in models)
+        self.models = [model.fit(self.messages_tfidf, self.y_train) for model in self.models]
+        y_predicts = [model.predict(self.to_tfidf(self.X_test)) for model in self.models]
 
         for y_predict in y_predicts:
-            print(confusion_matrix(self.y_test, y_predict))
-            print()
-     
-        y_predict1 = self.multinomial_nb.predict(self.to_tfidf(self.X_test))
-        print(confusion_matrix(self.y_test, y_predict1))
-
-
-
+            print(confusion_matrix(self.y_test, y_predict), '\n')
+    
     def to_tfidf(self, X):
         bag_of_words = self.bag_of_words_transformer.transform(X)
         tfidf = self.tfidf_transformer.transform(bag_of_words)
@@ -102,7 +93,9 @@ class SpamFilter:
     # return probability that given message is spam (0.0 - 1.0)
     def spam_score(self, X):
         tfidf = self.to_tfidf([X])
-        return self.multinomial_nb.predict_proba(tfidf)[0][1]
+        scores = [model.predict_proba(tfidf)[0][1] for model in self.models]
+        average = sum(scores) / len(scores)
+        return average
 
     def average_spam_score(self, blog, k):
         previous_messages = [get_message_from_post(previous_post) for previous_post in blog.take(k)]
@@ -213,8 +206,6 @@ class SpamDetectorBot:
 
     def run(self):
         self.model.test_model(self.probability_threshold)
-
-        return
         blockchain = Blockchain(steemd_instance=self.steem)
         # stream of comments
         stream = blockchain.stream(filter_by=['comment'])
