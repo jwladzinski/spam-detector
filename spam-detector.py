@@ -19,7 +19,9 @@ from steembase.exceptions import PostDoesNotExist
 from textblob import TextBlob
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.svm import SVC
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix
 from bs4 import BeautifulSoup
 
 steemd_nodes = [
@@ -29,7 +31,6 @@ steemd_nodes = [
     'https://steemd.steemgigs.org/'
 ]
 set_shared_steemd_instance(Steemd(nodes=steemd_nodes))
-
 
 # private posting key from environment variable
 POSTING_KEY = os.getenv('POMOCNIK_POSTING_KEY')
@@ -45,8 +46,8 @@ def get_message_from_post(post):
     message = post['body'].strip() 
     return replace_white_spaces_with_space(remove_html_and_markdown(message))
 
-# Multinomial Naive Bayes based spam filter trained from input file
-class NaiveBayesSpamFilter:
+
+class SpamFilter:
     def __init__(self, training_file):
         # read data from training file, each row contains label and message separated by '\t'
         self.messages = pd.read_csv(training_file, sep='\t', quoting=csv.QUOTE_NONE, names=['label', 'message'])
@@ -66,6 +67,21 @@ class NaiveBayesSpamFilter:
         # train Multinomial Naive Bayes algorithm with training data
         self.multinomial_nb = MultinomialNB().fit(self.messages_tfidf, self.y_train)
 
+        C = 1.0
+        svc = SVC(kernel='linear', C=C).fit(self.messages_tfidf, self.y_train)
+        
+        y_predict1 = self.multinomial_nb.predict(self.to_tfidf(self.X_test))
+        y_predict2 = svc.predict(self.to_tfidf(self.X_test))
+
+        print(confusion_matrix(self.y_test, y_predict1))
+        print(confusion_matrix(self.y_test, y_predict2))
+
+
+    def to_tfidf(self, X):
+        bag_of_words = self.bag_of_words_transformer.transform(X)
+        tfidf = self.tfidf_transformer.transform(bag_of_words)
+        return tfidf
+
     def make_dictionary(self, X):
         all_words = []       
         for x in X:
@@ -74,9 +90,8 @@ class NaiveBayesSpamFilter:
         return counter
 
     # return probability that given message is spam (0.0 - 1.0)
-    def spam_score(self, message):
-        bag_of_words = self.bag_of_words_transformer.transform([message])
-        tfidf = self.tfidf_transformer.transform(bag_of_words)
+    def spam_score(self, X):
+        tfidf = self.to_tfidf([X])
         return self.multinomial_nb.predict_proba(tfidf)[0][1]
 
     def average_spam_score(self, blog, k):
@@ -187,9 +202,7 @@ class SpamDetectorBot:
                 f.write(user + '\n')
 
     def run(self):
-
         self.model.test_model(self.probability_threshold)
-
         blockchain = Blockchain(steemd_instance=self.steem)
         # stream of comments
         stream = blockchain.stream(filter_by=['comment'])
@@ -213,15 +226,16 @@ class SpamDetectorBot:
                             print('*' if p > self.probability_threshold else ' ', end='')       
                             self.log(p, post['author'], message)
                             if p > self.probability_threshold:
-                                self.append_to_blacklist(post['author'])
+                                # self.append_to_blacklist(post['author'])
                                 self.append_message('spam', message)
                                 response = self.response(p, generic_message, rep)
-                                print(response)
-                                if self.reply_mode:
-                                    self.reply(post, response)
-                                if self.vote_mode:
-                                    self.vote(post)
-                    return
+                                # print(response)
+                                if post['author'] in self.blacklist:
+                                    print('---REACTED---')
+                                    if self.reply_mode:
+                                        self.reply(post, response)
+                                    if self.vote_mode:
+                                        self.vote(post)
             except PostDoesNotExist as pex:
                 continue
             except Exception as ex:
@@ -232,7 +246,7 @@ def main():
     # read config file
     config = json.loads(open(sys.argv[1]).read())
     # create model
-    model = NaiveBayesSpamFilter(config['training_file'])
+    model = SpamFilter(config['training_file'])
     # create bot
     bot = SpamDetectorBot(config, model)
     # start bot
