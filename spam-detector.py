@@ -78,7 +78,7 @@ class SpamFilter:
         self.messages_bag_of_words = self.bag_of_words_transformer.transform(self.X_train)
         self.tfidf_transformer = TfidfTransformer().fit(self.messages_bag_of_words)
         self.X_train = self.tfidf_transformer.transform(self.messages_bag_of_words)
-        # self.X_test = self.to_tfidf(self.X_test)
+        self.X_test = self.to_tfidf(self.X_test)
 
         C = 1.0
         self.model = StackedModel([
@@ -89,7 +89,7 @@ class SpamFilter:
             ], 
             self.X_train,
             self.y_train,
-            self.to_tfidf(self.X_test),
+            self.X_test,
             self.y_test) 
     
     def to_tfidf(self, X):
@@ -133,23 +133,6 @@ class SpamFilter:
         lemmas = filter(lambda w: w.isalpha(), lemmas)
         lemmas = filter(lambda w: len(w) > 1, lemmas)
         return lemmas
-
-    def test_model(self, probability_threshold):
-
-        confusion_matrix = [
-        [0, 0],
-        [0, 0]]
-
-        X_test = self.X_test.tolist()
-        y_test = self.y_test.tolist()
-
-        for i, x in enumerate(X_test):
-            prediction = 0 if self.spam_score(x) <= probability_threshold else 1
-            label = 0 if y_test[i] == 'ham' else 1
-            confusion_matrix[prediction][label] += 1
-
-        print(np.array(confusion_matrix))
-
 
 class SpamDetectorBot:
     def __init__(self, config, model):
@@ -217,7 +200,6 @@ class SpamDetectorBot:
                 f.write(user + '\n')
 
     def run(self):
-        self.model.test_model(self.probability_threshold)
         blockchain = Blockchain(steemd_instance=self.steem)
         # stream of comments
         stream = blockchain.stream(filter_by=['comment'])
