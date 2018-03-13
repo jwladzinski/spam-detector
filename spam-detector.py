@@ -146,11 +146,13 @@ class SpamDetectorBot:
         self.training_file = config['training_file']
         self.blacklist_file = config['blacklist_file']
         self.whitelist_file = config['whitelist_file']
+        self.scamlist_file = config['scamlist_file']
         self.reply_mode = config['reply_mode']
         self.vote_mode = config['vote_mode']
         self.vote_weight = config['vote_weight']
         self.blacklist = [user.strip() for user in open(self.blacklist_file, 'r').readlines()]
         self.whitelist = [user.strip() for user in open(self.whitelist_file, 'r').readlines()]
+        self.scamlist = [user.strip() for user in open(self.scamlist_file, 'r').readlines()]
         self.num_previous_comments = config['num_previous_comments']
         self.steem = Steem(nodes=self.nodes, keys=[POSTING_KEY])
 
@@ -219,22 +221,28 @@ class SpamDetectorBot:
                                 print('Ignored:', post['author'])
                                 continue
 
-                            message = get_message_from_post(post) 
-                            blog = Blog(account_name=post['author'], comments_only=True, steemd_instance=self.steem)
-                            p, generic_message, rep = self.model.average_spam_score(blog, self.num_previous_comments)
-                            print('*' if p > self.probability_threshold else ' ', end='')       
-                            self.log(p, post['author'], message)
-                            if p > self.probability_threshold:
-                                # self.append_to_blacklist(post['author'])
-                                self.append_message('spam', message)
-                                response = self.response(p, generic_message, rep)
-                                # print(response)
-                                if post['author'] in self.blacklist:
-                                    print('---REACTED---')
-                                    if self.reply_mode:
-                                        self.reply(post, response)
-                                    if self.vote_mode:
-                                        self.vote(post)
+                            elif post['author'] in self.scamlist:
+                                print('Scam:', post['author'])
+                                self.reply(post, 'Scam alert! Do not click in link!')
+                                self.vote(post)
+                                
+                            else:    
+                                message = get_message_from_post(post) 
+                                blog = Blog(account_name=post['author'], comments_only=True, steemd_instance=self.steem)
+                                p, generic_message, rep = self.model.average_spam_score(blog, self.num_previous_comments)
+                                print('*' if p > self.probability_threshold else ' ', end='')       
+                                self.log(p, post['author'], message)
+                                if p > self.probability_threshold:
+                                    # self.append_to_blacklist(post['author'])
+                                    self.append_message('spam', message)
+                                    response = self.response(p, generic_message, rep)
+                                    # print(response)
+                                    if post['author'] in self.blacklist:
+                                        print('---REACTED---')
+                                        if self.reply_mode:
+                                            self.reply(post, response)
+                                        if self.vote_mode:
+                                            self.vote(post)
             except PostDoesNotExist as pex:
                 continue
             except Exception as ex:
