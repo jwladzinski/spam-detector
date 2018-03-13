@@ -48,13 +48,10 @@ def get_message_from_post(post):
     message = post['body'].strip() 
     return replace_white_spaces_with_space(remove_html_and_markdown(message))
 
-
 class StackedModel():
     def __init__(self, models, X_train, y_train, X_test, y_test):
         self.models = models
         self.models = [model.fit(X_train, y_train) for model in self.models]
-
-        
 
         y_predicts = [model.predict(X_test) for model in self.models]
         for y_predict, model in zip(y_predicts, self.models):
@@ -66,13 +63,10 @@ class StackedModel():
         print('Confusion matrix:')    
         stacked_y_predict = [self.predict(x) for x in X_test]
 
-
         stacked_confusion_matrix = confusion_matrix(y_test, stacked_y_predict)
         print(stacked_confusion_matrix, '\n')
-
         self.plot_confusion_matrix(stacked_confusion_matrix , classes=['Spam', 'Ham'])
         
-
     def predict(self, x):
         return 'spam' if self.predict_proba(x) >= 0.5 else 'ham'
 
@@ -120,6 +114,7 @@ class SpamFilter:
         self.X_test = self.to_tfidf(self.X_test)
 
         C = 1.0
+        # 4 algorithms stacked in one
         self.model = StackedModel([
             MultinomialNB(),
             SVC(kernel='linear', C=C, probability=True),
@@ -151,6 +146,7 @@ class SpamFilter:
         generic_comment = None
         rep = most_common[1]
 
+        # 50% comments are the repeated
         if rep >= 0.5 * k:
             generic_comment = most_common[0]
 
@@ -251,10 +247,12 @@ class SpamDetectorBot:
                         # otherwise bot analyzes only comments that contains at least one of given tag          
                         if self.filter_by_tag(main_post['tags']):
 
+                            # users on whitelist are ignored
                             if post['author'] in self.whitelist:
                                 print('Ignored:', post['author'])
                                 continue
 
+                            # users on scamlist are flagged without immediately
                             elif post['author'] in self.scamlist:
                                 print('Scam:', post['author'])
                                 self.reply(post, 'Scam alert! Do not click in link!')
