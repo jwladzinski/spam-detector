@@ -52,8 +52,11 @@ class StackedModel():
         self.models = models
         self.models = [model.fit(X_train, y_train) for model in self.models]
 
+        print('---CONFUSION MATRIX---')
+
         y_predicts = [model.predict(X_test) for model in self.models]
-        for y_predict in y_predicts:
+        for y_predict, model in zip(y_predicts, self.models):
+            print(model)
             print(confusion_matrix(y_test, y_predict), '\n')
 
         stacked_y_predict = [self.predict(x) for x in X_test]
