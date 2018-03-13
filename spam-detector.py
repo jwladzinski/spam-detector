@@ -203,6 +203,9 @@ class SpamDetectorBot:
             with open(self.blacklist_file, 'a') as f:
                 f.write(user + '\n')
 
+    def filter_by_tag(self, tags):
+        return not self.tags or (set(self.tags) & set(tags)):
+
     def run(self):
         blockchain = Blockchain(steemd_instance=self.steem)
         # stream of comments
@@ -215,7 +218,7 @@ class SpamDetectorBot:
                         main_post = self.main_post(post)
                         # if self.tags is empty bot analyzes all tags
                         # otherwise bot analyzes only comments that contains at least one of given tag          
-                        if not self.tags or (set(self.tags) & set(main_post['tags'])):
+                        if self.filter_by_tag(main_post['tags'])
 
                             if post['author'] in self.whitelist:
                                 print('Ignored:', post['author'])
