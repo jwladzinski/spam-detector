@@ -46,6 +46,21 @@ def get_message_from_post(post):
     message = post['body'].strip() 
     return replace_white_spaces_with_space(remove_html_and_markdown(message))
 
+
+class StackedModel():
+    def __init__(self, models, X_train, y_train, X_test, y_test):
+        self.models = models
+        self.models = [model.fit(X_train, y_train) for model in self.models]
+
+        y_predicts = [model.predict(X_test) for model in self.models]
+        for y_predict in y_predicts:
+            print(confusion_matrix(y_test, y_predict), '\n')
+
+    def predict_proba(self, x):
+        probas = [model.predict_proba(x)[0][1] for model in self.models]
+        weighted_proba = sum(probas) / len(probas)
+        return weighted_proba
+
 class SpamFilter:
     def __init__(self, training_file):
         # read data from training file, each row contains label and message separated by '\t'
@@ -62,21 +77,20 @@ class SpamFilter:
 
         self.messages_bag_of_words = self.bag_of_words_transformer.transform(self.X_train)
         self.tfidf_transformer = TfidfTransformer().fit(self.messages_bag_of_words)
-        self.messages_tfidf = self.tfidf_transformer.transform(self.messages_bag_of_words)
+        self.X_train = self.tfidf_transformer.transform(self.messages_bag_of_words)
+        # self.X_test = self.to_tfidf(self.X_test)
 
         C = 1.0
-
-        self.models = (
+        self.model = StackedModel([
             MultinomialNB(),
-            SVC(kernel='linear', C=C, probability=True),     
+            SVC(kernel='linear', C=C, probability=True),
             SVC(kernel='rbf', gamma=0.7, C=C, probability=True),
-            NuSVC(probability=True))
-
-        self.models = [model.fit(self.messages_tfidf, self.y_train) for model in self.models]
-        y_predicts = [model.predict(self.to_tfidf(self.X_test)) for model in self.models]
-
-        for y_predict in y_predicts:
-            print(confusion_matrix(self.y_test, y_predict), '\n')
+            NuSVC(probability=True)
+            ], 
+            self.X_train,
+            self.y_train,
+            self.to_tfidf(self.X_test),
+            self.y_test) 
     
     def to_tfidf(self, X):
         bag_of_words = self.bag_of_words_transformer.transform(X)
@@ -93,9 +107,7 @@ class SpamFilter:
     # return probability that given message is spam (0.0 - 1.0)
     def spam_score(self, X):
         tfidf = self.to_tfidf([X])
-        scores = [model.predict_proba(tfidf)[0][1] for model in self.models]
-        average = sum(scores) / len(scores)
-        return average
+        return self.model.predict_proba(tfidf)
 
     def average_spam_score(self, blog, k):
         previous_messages = [get_message_from_post(previous_post) for previous_post in blog.take(k)]
