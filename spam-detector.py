@@ -19,7 +19,7 @@ from steembase.exceptions import PostDoesNotExist
 from textblob import TextBlob
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.svm import SVC
+from sklearn.svm import SVC, LinearSVC
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
 from bs4 import BeautifulSoup
@@ -68,13 +68,23 @@ class SpamFilter:
         self.multinomial_nb = MultinomialNB().fit(self.messages_tfidf, self.y_train)
 
         C = 1.0
-        svc = SVC(kernel='linear', C=C).fit(self.messages_tfidf, self.y_train)
-        
-        y_predict1 = self.multinomial_nb.predict(self.to_tfidf(self.X_test))
-        y_predict2 = svc.predict(self.to_tfidf(self.X_test))
 
+        models = (
+            SVC(kernel='linear', C=C),
+            LinearSVC(C=C),
+            SVC(kernel='rbf', gamma=0.7, C=C),
+            SVC(kernel='poly', degree=2, C=C))
+
+        models = (clf.fit(self.messages_tfidf, self.y_train) for clf in models)
+        y_predicts = (model.predict(self.to_tfidf(self.X_test)) for model in models)
+
+        for y_predict in y_predicts:
+            print(confusion_matrix(self.y_test, y_predict))
+            print()
+     
+        y_predict1 = self.multinomial_nb.predict(self.to_tfidf(self.X_test))
         print(confusion_matrix(self.y_test, y_predict1))
-        print(confusion_matrix(self.y_test, y_predict2))
+
 
 
     def to_tfidf(self, X):
@@ -203,6 +213,8 @@ class SpamDetectorBot:
 
     def run(self):
         self.model.test_model(self.probability_threshold)
+
+        return
         blockchain = Blockchain(steemd_instance=self.steem)
         # stream of comments
         stream = blockchain.stream(filter_by=['comment'])
