@@ -12,7 +12,7 @@ dateparser==0.6.0
 defer==1.0.6
 diff-match-patch==20121119
 distro-info==0.17
-ecdsa==0.13
+ecdsa==0.13.3
 funcy==1.10
 httplib2==0.9.2
 humanize==0.5.1
