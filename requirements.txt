@@ -30,7 +30,7 @@ olefile==0.44
 pandas==0.22.0
 pendulum==1.4.0
 pexpect==4.2.1
-Pillow==4.1.1
+Pillow==6.2.0
 pipfile==0.0.2
 pluggy==0.6.0
 prettytable==0.7.2
