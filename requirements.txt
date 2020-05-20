@@ -14,7 +14,7 @@ diff-match-patch==20121119
 distro-info==0.17
 ecdsa==0.13
 funcy==1.10
-httplib2==0.9.2
+httplib2==0.18.0
 humanize==0.5.1
 idna==2.6
 keyring==10.4.0
